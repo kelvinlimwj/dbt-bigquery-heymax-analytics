@@ -31,3 +31,6 @@ steps:
         dbt run --profiles-dir /builder/home/.dbt
 
 timeout: 1200s
+
+options:
+  logging: CLOUD_LOGGING_ONLY
