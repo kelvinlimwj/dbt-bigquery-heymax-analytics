@@ -16,7 +16,7 @@ def gcs_to_bq(event, context):
         print(f"Unsupported file type: {file_name}. Skipping.")
         return
 
-    if not file_name.startswith('event_stream_data/'):
+    if not file_name.startswith('event_stream/'):
         print("File not in expected folder. Skipping.")
         return
 
