@@ -11,7 +11,7 @@ steps:
 images:
   - "asia-southeast1-docker.pkg.dev/heymax-kelvin-analytics/dbt-images/dbt-runner"
 
-timeout: 1200s
+timeout: 1500s
 
 options:
   logging: CLOUD_LOGGING_ONLY
