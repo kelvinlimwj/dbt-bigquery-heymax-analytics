@@ -5,7 +5,7 @@ steps:
         "build",
         "-t",
         "asia-southeast1-docker.pkg.dev/heymax-kelvin-analytics/dbt-images/dbt-runner",
-        "./dbt-docker-repo"
+        "./dbt_docker_repo"
       ]
 
 images:
