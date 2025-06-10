@@ -1,5 +1,5 @@
 steps:
-  - name: gcr.io/heymax-kelvin-analytics/dbt-runner
+  - name: asia-southeast1-docker.pkg.dev/heymax-kelvin-analytics/dbt-images/dbt-runner:latest
     entrypoint: bash
     args:
       - -c
