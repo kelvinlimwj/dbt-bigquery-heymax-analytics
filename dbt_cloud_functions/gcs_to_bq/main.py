@@ -1,43 +1,64 @@
-from google.cloud import bigquery
+import os
 import uuid
+from google.cloud import bigquery
 
 def gcs_to_bq(event, context):
     client = bigquery.Client()
 
+    project_id = os.environ.get("BQ_PROJECT")
+    dataset_id = os.environ.get("BQ_DATASET")
+    table_id = os.environ.get("BQ_TABLE")
+
     bucket = event['bucket']
     file_name = event['name']
-    dataset_id = "heymax_analytics"
-    table_id = "event_stream_raw"
-    project_id = "dbt-analytics-heymax"
 
-    if not file_name.endswith('.csv') or not file_name.startswith('event_stream_data/'):
-        print("Not a valid CSV file or not in expected folder. Skipping.")
+    if not (file_name.endswith('.csv') or file_name.endswith('.json')):
+        print(f"Unsupported file type: {file_name}. Skipping.")
+        return
+
+    if not file_name.startswith('event_stream_data/'):
+        print("File not in expected folder. Skipping.")
         return
 
     uri = f"gs://{bucket}/{file_name}"
     temp_table = f"{dataset_id}.temp_{uuid.uuid4().hex[:8]}"
 
-    job_config = bigquery.LoadJobConfig(
-        autodetect=True,
-        skip_leading_rows=1,
-        source_format=bigquery.SourceFormat.CSV,
-        write_disposition="WRITE_TRUNCATE"
-    )
+    if file_name.endswith('.csv'):
+        print("CSV file detected.")
+        job_config = bigquery.LoadJobConfig(
+            autodetect=True,
+            skip_leading_rows=1,
+            source_format=bigquery.SourceFormat.CSV,
+            write_disposition="WRITE_TRUNCATE"
+        )
+    elif file_name.endswith('.json'):
+        print("JSON file detected.")
+        job_config = bigquery.LoadJobConfig(
+            autodetect=True,
+            source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
+            write_disposition="WRITE_TRUNCATE"
+        )
 
     load_job = client.load_table_from_uri(uri, f"{project_id}.{temp_table}", job_config=job_config)
     load_job.result()
     print(f"Loaded {uri} into temporary table {temp_table}")
 
-    temp_schema = [field.name for field in client.get_table(f"{project_id}.{temp_table}").schema]
-    target_schema = [field.name for field in client.get_table(f"{project_id}.{dataset_id}.{table_id}").schema]
-    common_columns = list(set(temp_schema) & set(target_schema))
+    temp_cols = [field.name for field in client.get_table(f"{project_id}.{temp_table}").schema]
+    target_cols = [field.name for field in client.get_table(f"{project_id}.{dataset_id}.{table_id}").schema]
 
-    if not common_columns:
+    new_columns = list(set(temp_cols) - set(target_cols))
+    if new_columns:
+        print(f"New columns found in uploaded file (not in target table): {new_columns}")
+    else:
+        print("No new columns found in uploaded file.")
+
+    common_cols = list(set(temp_cols) & set(target_cols))
+    if not common_cols:
         print("No matching columns between staging and target table. Aborting merge.")
         return
 
-    select_cols = ", ".join([f"`{col}`" for col in common_columns])
-    merge_condition = " AND ".join([f"T.{col} = S.{col}" for col in common_columns])
+    select_cols = ", ".join([f"`{col}`" for col in common_cols])
+    merge_condition = " AND ".join([f"T.{col} = S.{col}" for col in common_cols])
 
     merge_sql = f"""
     MERGE `{project_id}.{dataset_id}.{table_id}` T
@@ -52,7 +73,7 @@ def gcs_to_bq(event, context):
     """
 
     client.query(merge_sql).result()
-    print("Merge completed based on full column match.")
+    print("Merge completed based on full-column match.")
 
     client.delete_table(f"{project_id}.{temp_table}")
     print(f"Temporary table {temp_table} deleted.")
