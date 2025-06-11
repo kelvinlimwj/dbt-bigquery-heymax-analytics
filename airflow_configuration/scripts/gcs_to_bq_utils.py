@@ -2,7 +2,7 @@ import os
 import uuid
 from google.cloud import bigquery, storage
 
-def load_latest_csv_to_bq(project_id, dataset_id, table_id, bucket_name, prefix="event_stream/"):
+def load_latest_csv_to_bq(project_id, dataset_id, table_id, bucket_name, prefix):
     bq_client = bigquery.Client()
     storage_client = storage.Client()
 
