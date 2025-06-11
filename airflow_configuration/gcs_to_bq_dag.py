@@ -3,11 +3,18 @@ import os
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'scripts')))
 
-from gcs_to_bq_utils import load_latest_csv_to_bq
+from gcs_to_bq_utils import load_latest_file_to_bq
+from api_to_gcs import fetch_api_and_upload_to_gcs
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from datetime import datetime
+
+# Update here for file name when API is called
+
+today_str = datetime.now().strftime("%d%m%y")
+dynamic_filename = f"event_data_{today_str}.json"
+#dynamic_filename = f"event_data_{today_str}.csv"
 
 default_args = {
     'owner': 'airflow',
@@ -15,22 +22,35 @@ default_args = {
 }
 
 with DAG(
-    dag_id='load_latest_gcs_csv_to_bigquery',
+    dag_id='api_to_gcs_then_bq',
     default_args=default_args,
     start_date=datetime(2024, 1, 1),
     schedule_interval='@daily',
     catchup=False,
-    tags=['gcs', 'bigquery']
+    tags=['api', 'gcs', 'bigquery']
 ) as dag:
 
-    load_task = PythonOperator(
-        task_id='load_latest_csv',
-        python_callable=load_latest_csv_to_bq,
+    upload_to_gcs = PythonOperator(
+        task_id='fetch_api_and_upload_to_gcs',
+        python_callable=fetch_api_and_upload_to_gcs,
         op_kwargs={
-            "project_id": "your-project-id",
-            "dataset_id": "your-dataset-id",
-            "table_id": "your-table-name",
-            "bucket_name": "your-bucket-name",
-            "prefix": "event_stream/"
+            "api_url": "https://jsonplaceholder.typicode.com/posts", 
+            "bucket_name": "heymax_kelvin_raw_data_sg",
+            "gcs_folder": "event_stream_data", 
+            "gcs_file_name": dynamic_filename 
         }
     )
+
+    load_to_bq = PythonOperator(
+        task_id='load_latest_to_bigquery',
+        python_callable=load_latest_file_to_bq,
+        op_kwargs={
+            "project_id": "heymax-kelvin-analytics",
+            "dataset_id": "heymax_analytics",
+            "table_id": "event_stream_raw",
+            "bucket_name": "heymax_kelvin_raw_data_sg",
+            "gcs_folder": "event_stream_data"
+        }
+    )
+
+    upload_to_gcs >> load_to_bq
