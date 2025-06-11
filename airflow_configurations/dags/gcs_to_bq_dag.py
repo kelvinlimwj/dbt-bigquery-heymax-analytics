@@ -1,10 +1,8 @@
 import sys
 import os
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'scripts')))
-
-from gcs_to_bq_utils import load_latest_file_to_bq
-from api_to_gcs import fetch_api_and_upload_to_gcs
+from scripts.gcs_to_bq_utils import load_latest_file_to_bq
+from scripts.api_to_gcs import fetch_api_and_upload_to_gcs
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
