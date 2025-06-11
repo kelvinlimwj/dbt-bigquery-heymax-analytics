@@ -1,15 +1,16 @@
 from airflow import DAG
-from airflow.operators.dummy import DummyOperator
+from airflow.operators.bash import BashOperator
 from datetime import datetime
 
 with DAG(
-    dag_id="test_gcs_logging_dag",
+    dag_id="test_gcs_bash_log",
     start_date=datetime(2025, 6, 11),
     schedule_interval=None,
     catchup=False,
-    tags=["test", "logging"],
+    tags=["debug"],
 ) as dag:
 
-    test_log = DummyOperator(
-        task_id="log_this_task"
+    test_task = BashOperator(
+        task_id="echo_hello",
+        bash_command="echo 'This is a test GCS log upload.'"
     )
