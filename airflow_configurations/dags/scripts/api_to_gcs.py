@@ -4,6 +4,8 @@ import tempfile
 from google.cloud import storage
 
 def fetch_api_and_upload_to_gcs(api_url, bucket_name, gcs_folder, gcs_file_name):
+
+    print(">>> Task started — entering fetch logic")
     
     response = requests.get(api_url)
     if response.status_code != 200:
