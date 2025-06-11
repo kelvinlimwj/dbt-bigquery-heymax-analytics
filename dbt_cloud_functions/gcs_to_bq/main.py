@@ -2,15 +2,8 @@ import os
 import uuid
 from google.cloud import bigquery
 
-def gcs_to_bq(event, context):
+def load_gcs_to_bq(project_id, dataset_id, table_id, bucket_name, file_name):
     client = bigquery.Client()
-
-    project_id = os.environ.get("BQ_PROJECT")
-    dataset_id = os.environ.get("BQ_DATASET")
-    table_id = os.environ.get("BQ_TABLE")
-
-    bucket = event['bucket']
-    file_name = event['name']
 
     if not (file_name.endswith('.csv') or file_name.endswith('.json')):
         print(f"Unsupported file type: {file_name}. Skipping.")
@@ -20,7 +13,7 @@ def gcs_to_bq(event, context):
         print("File not in expected folder. Skipping.")
         return
 
-    uri = f"gs://{bucket}/{file_name}"
+    uri = f"gs://{bucket_name}/{file_name}"
     temp_table = f"{dataset_id}.temp_{uuid.uuid4().hex[:8]}"
 
     if file_name.endswith('.csv'):
