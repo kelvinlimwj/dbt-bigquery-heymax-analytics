@@ -32,7 +32,6 @@ def load_latest_file_to_bq(project_id, dataset_id, table_id, bucket_name, gcs_fo
     elif file_name.endswith(".json"):
         print("Detected JSON file.")
 
-        # Download the blob to memory
         raw_data = latest_blob.download_as_bytes()
         try:
             import json
@@ -42,15 +41,13 @@ def load_latest_file_to_bq(project_id, dataset_id, table_id, bucket_name, gcs_fo
                 print("JSON is an array, converting to NDJSON...")
                 import tempfile
 
-                # Convert to NDJSON
                 ndjson_str = '\n'.join([json.dumps(record) for record in parsed])
 
-                # Upload to temporary location in GCS
                 temp_blob_name = f"{prefix}temp_ndjson_{uuid.uuid4().hex[:8]}.json"
                 temp_blob = storage_client.bucket(bucket_name).blob(temp_blob_name)
                 temp_blob.upload_from_string(ndjson_str, content_type="application/json")
 
-                uri = f"gs://{bucket_name}/{temp_blob_name}"  # Override the GCS URI
+                uri = f"gs://{bucket_name}/{temp_blob_name}" 
 
             else:
                 print("JSON is already in NDJSON format.")
@@ -74,34 +71,38 @@ def load_latest_file_to_bq(project_id, dataset_id, table_id, bucket_name, gcs_fo
         temp_blob.delete()
         print(f"Deleted temporary NDJSON blob: {temp_blob_name}")
 
-    temp_cols = [field.name for field in bq_client.get_table(f"{project_id}.{temp_table}").schema]
-    target_cols = [field.name for field in bq_client.get_table(f"{project_id}.{dataset_id}.{table_id}").schema]
+    try:
+        temp_cols = [field.name for field in bq_client.get_table(f"{project_id}.{temp_table}").schema]
+        target_cols = [field.name for field in bq_client.get_table(f"{project_id}.{dataset_id}.{table_id}").schema]
 
-    common_cols = list(set(temp_cols) & set(target_cols))
-    if not common_cols:
-        print("No matching columns between temp and target table. Aborting merge.")
-        return
+        common_cols = list(set(temp_cols) & set(target_cols))
+        if not common_cols:
+            print("No matching columns between temp and target table. Aborting merge.")
+            return
 
-    new_columns = list(set(temp_cols) - set(target_cols))
-    if new_columns:
-        print(f"New columns found in temp not present in target: {new_columns}")
+        new_columns = list(set(temp_cols) - set(target_cols))
+        if new_columns:
+            print(f"New columns found in temp not present in target: {new_columns}. Aborting merge.")
+            return
 
-    select_cols = ", ".join([f"`{col}`" for col in common_cols])
-    merge_condition = " AND ".join([f"T.{col} = S.{col}" for col in common_cols])
-    merge_sql = f"""
-    MERGE `{project_id}.{dataset_id}.{table_id}` T
-    USING (
-        SELECT {select_cols}
-        FROM `{project_id}.{temp_table}`
-    ) S
-    ON {merge_condition}
-    WHEN NOT MATCHED THEN
-      INSERT ({select_cols})
-      VALUES ({select_cols})
-    """
+        select_cols = ", ".join([f"`{col}`" for col in common_cols])
+        merge_condition = " AND ".join([f"T.{col} = S.{col}" for col in common_cols])
+        merge_sql = f"""
+        MERGE `{project_id}.{dataset_id}.{table_id}` T
+        USING (
+            SELECT {select_cols}
+            FROM `{project_id}.{temp_table}`
+        ) S
+        ON {merge_condition}
+        WHEN NOT MATCHED THEN
+        INSERT ({select_cols})
+        VALUES ({select_cols})
+        """
 
-    bq_client.query(merge_sql).result()
-    print("Merge completed.")
+        bq_client.query(merge_sql).result()
+        print("Merge completed.")
 
-    bq_client.delete_table(f"{project_id}.{temp_table}")
-    print(f"Deleted temp table: {temp_table}")
+    finally:
+        bq_client.delete_table(f"{project_id}.{temp_table}", not_found_ok=True)
+        print(f"Deleted temp table: {temp_table}")
+
