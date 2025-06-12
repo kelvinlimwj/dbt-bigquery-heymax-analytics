@@ -1,8 +1,9 @@
 import sys
 import os
 
-from scripts.gcs_to_bq_utils import load_latest_file_to_bq
 from scripts.api_to_gcs import fetch_api_and_upload_to_gcs
+from scripts.gcs_to_bq_utils import load_latest_file_to_bq
+from scripts.eventstream_cloudbuild import trigger_dbt_cloud_build
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
@@ -51,4 +52,14 @@ with DAG(
         }
     )
 
-    upload_to_gcs >> load_to_bq
+    eventstream_build = PythonOperator(
+        task_id="eventstream_dbt_run",
+        python_callable=trigger_dbt_cloud_build,
+        op_kwargs={
+            "project_id": "heymax-kelvin-analytics",
+            "trigger_id": "d9f296eb-d9ff-4669-911b-dc2998db6e3d", 
+            "branch": "main"
+        }
+    )
+
+    upload_to_gcs >> load_to_bq >> eventstream_build
