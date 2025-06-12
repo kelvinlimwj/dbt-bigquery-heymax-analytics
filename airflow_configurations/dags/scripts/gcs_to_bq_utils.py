@@ -30,12 +30,30 @@ def load_latest_file_to_bq(project_id, dataset_id, table_id, bucket_name, gcs_fo
         )
         print("Detected CSV file.")
     elif file_name.endswith(".json"):
+        print("Detected JSON file.")
+        json_bytes = latest_blob.download_as_bytes()
+        json_array = json.loads(json_bytes)
+
+        temp_fd, temp_path = tempfile.mkstemp(suffix=".json")
+        with open(temp_path, "w") as f:
+            for obj in json_array:
+                f.write(json.dumps(obj) + "\n")
+
+        ndjson_blob_name = f"{prefix}ndjson_temp_{uuid.uuid4().hex[:8]}.json"
+        ndjson_blob = storage_client.bucket(bucket_name).blob(ndjson_blob_name)
+        ndjson_blob.upload_from_filename(temp_path)
+
+        uri = f"gs://{bucket_name}/{ndjson_blob_name}"
         job_config = bigquery.LoadJobConfig(
             autodetect=True,
             source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
             write_disposition="WRITE_TRUNCATE"
         )
-        print("Detected JSON file.")
+
+    temp_table = f"{dataset_id}.temp_{uuid.uuid4().hex[:8]}"
+    load_job = bq_client.load_table_from_uri(uri, f"{project_id}.{temp_table}", job_config=job_config)
+    load_job.result()
+    print(f"Loaded {uri} into {temp_table}")
 
     temp_table = f"{dataset_id}.temp_{uuid.uuid4().hex[:8]}"
     load_job = bq_client.load_table_from_uri(uri, f"{project_id}.{temp_table}", job_config=job_config)
