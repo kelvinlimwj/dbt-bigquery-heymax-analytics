@@ -70,10 +70,9 @@ def load_latest_file_to_bq(project_id, dataset_id, table_id, bucket_name, gcs_fo
     load_job.result()
     print(f"Loaded {uri} into {temp_table}")
 
-    temp_table = f"{dataset_id}.temp_{uuid.uuid4().hex[:8]}"
-    load_job = bq_client.load_table_from_uri(uri, f"{project_id}.{temp_table}", job_config=job_config)
-    load_job.result()
-    print(f"Loaded {uri} into {temp_table}")
+    if 'temp_blob' in locals():
+        temp_blob.delete()
+        print(f"Deleted temporary NDJSON blob: {temp_blob_name}")
 
     temp_cols = [field.name for field in bq_client.get_table(f"{project_id}.{temp_table}").schema]
     target_cols = [field.name for field in bq_client.get_table(f"{project_id}.{dataset_id}.{table_id}").schema]
